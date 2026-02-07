@@ -3,9 +3,11 @@ import puppeteer from 'puppeteer';
 
 const router = express.Router();
 
+const MARGIN_MAP = { none: '0', narrow: '10px', normal: '20px', wide: '40px' };
+
 router.post('/generate', async (req, res) => {
   try {
-    const { html } = req.body;
+    const { html, format = 'A4', landscape = false, margin = 'normal' } = req.body;
     
     if (!html) {
       return res.status(400).json({ 
@@ -13,6 +15,9 @@ router.post('/generate', async (req, res) => {
         error: 'HTML is required' 
       });
     }
+
+    const marginVal = MARGIN_MAP[margin] ?? MARGIN_MAP.normal;
+    const marginObj = { top: marginVal, right: marginVal, bottom: marginVal, left: marginVal };
 
     const browser = await puppeteer.launch({
       headless: 'new',
@@ -23,9 +28,10 @@ router.post('/generate', async (req, res) => {
     await page.setContent(html, { waitUntil: 'networkidle0' });
 
     const pdfBuffer = await page.pdf({
-      format: 'A4',
+      format: format === 'Letter' || format === 'A5' ? format : 'A4',
+      landscape: !!landscape,
       printBackground: true,
-      margin: { top: '20px', right: '20px', bottom: '20px', left: '20px' }
+      margin: marginObj
     });
 
     await browser.close();
