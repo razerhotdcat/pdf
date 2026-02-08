@@ -1,4 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+// @ts-expect-error firebase.js is plain JS; 키 설정 후 사용
+import { signInWithGoogle } from './firebase';
 
 export type ToastType = 'success' | 'info' | 'error';
 export interface ToastItem {
@@ -120,7 +123,7 @@ function TextBox({
   onMove,
   onTextChange,
   onStyleChange,
-  onDelete,
+  onDelete: _onDelete,
   onFocus,
   onDragEnd,
 }: TextBoxProps) {
@@ -209,79 +212,6 @@ function TextBox({
       style={{ left: obj.x, top: obj.y }}
       onMouseDown={handleMouseDown}
     >
-      {isFocused && (
-        <div className="toolbar no-print absolute left-0 bottom-full mb-1 flex items-center gap-0.5 bg-gray-800 text-white rounded-lg shadow-lg px-1.5 py-1 text-sm">
-          <button
-            type="button"
-            className="p-1.5 rounded hover:bg-gray-600"
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { fontSize: Math.max(MIN_FONT_SIZE, obj.fontSize - 2) }); }}
-            title="글자 작게"
-          >
-            A−
-          </button>
-          <button
-            type="button"
-            className="p-1.5 rounded hover:bg-gray-600"
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { fontSize: Math.min(MAX_FONT_SIZE, obj.fontSize + 2) }); }}
-            title="글자 크게"
-          >
-            A+
-          </button>
-          <span className="w-px h-4 bg-gray-500 mx-0.5" />
-          <button
-            type="button"
-            className={`p-1.5 rounded hover:bg-gray-600 font-bold ${obj.fontWeight === 'bold' ? 'bg-gray-600' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { fontWeight: obj.fontWeight === 'bold' ? 'normal' : 'bold' }); }}
-            title="굵게"
-          >
-            B
-          </button>
-          <button
-            type="button"
-            className={`p-1.5 rounded hover:bg-gray-600 italic ${obj.fontStyle === 'italic' ? 'bg-gray-600' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { fontStyle: obj.fontStyle === 'italic' ? 'normal' : 'italic' }); }}
-            title="기울임"
-          >
-            I
-          </button>
-          <span className="w-px h-4 bg-gray-500 mx-0.5" />
-          <button
-            type="button"
-            className={`p-1.5 rounded hover:bg-gray-600 ${obj.textAlign === 'left' ? 'bg-gray-600' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { textAlign: 'left' }); }}
-            title="왼쪽 정렬"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm0 4h10v2H4V9zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/></svg>
-          </button>
-          <button
-            type="button"
-            className={`p-1.5 rounded hover:bg-gray-600 ${obj.textAlign === 'center' ? 'bg-gray-600' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { textAlign: 'center' }); }}
-            title="가운데 정렬"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm4 4h8v2H8V9zm-4 4h16v2H4v-2zm4 4h8v2H8v-2z"/></svg>
-          </button>
-          <button
-            type="button"
-            className={`p-1.5 rounded hover:bg-gray-600 ${obj.textAlign === 'right' ? 'bg-gray-600' : ''}`}
-            onClick={(e) => { e.stopPropagation(); onStyleChange(obj.id, { textAlign: 'right' }); }}
-            title="오른쪽 정렬"
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm6 4h10v2H10V9zm-6 4h16v2H4v-2zm6 4h10v2H10v-2z"/></svg>
-          </button>
-          <span className="w-px h-4 bg-gray-500 mx-0.5" />
-          <button
-            type="button"
-            data-delete-btn
-            className="p-1.5 rounded hover:bg-red-600"
-            onClick={(e) => { e.stopPropagation(); onDelete(obj.id); }}
-            title="삭제"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-          </button>
-        </div>
-      )}
-
       <div
         className={`text-box-inner relative rounded px-1 py-0.5 overflow-visible ${
           isFocused ? 'border border-indigo-500 bg-white/95' : 'border border-transparent bg-transparent'
@@ -337,13 +267,14 @@ function App() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiStatus, setAiStatus] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
   const [aiExampleIndex, setAiExampleIndex] = useState(0);
   const [showSoftWall, setShowSoftWall] = useState(false);
   const AI_EXAMPLES = [
+    '예: 날짜 써줘',
     '예: 오늘 날짜로 채워줘',
     '예: 주변 글씨체랑 맞춰줘',
     '예: 자동 채우기',
-    '예: 주변 스타일 복제',
   ];
   const [saveCount, setSaveCount] = useState(0);
   const visitStartedAtRef = useRef(Date.now());
@@ -612,6 +543,7 @@ function App() {
     setLoadPreviewData(null);
   }, []);
 
+  // 자동 저장: beforeunload 미사용. 데이터 변경 시 localStorage에만 조용히 저장하여 새로고침 시 브라우저 경고가 뜨지 않게 함.
   useEffect(() => {
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     if (isInitialMountRef.current) {
@@ -624,7 +556,6 @@ function App() {
     }
     if (!backgroundImage && textObjects.length === 0) return;
 
-    setSaveStatus('pending');
     autoSaveTimerRef.current = setTimeout(() => {
       performSave(backgroundImage, textObjects);
       autoSaveTimerRef.current = null;
@@ -653,11 +584,11 @@ function App() {
     setFocusedId((prev) => (prev === id ? null : prev));
   }, []);
 
-  const runAiCommand = useCallback(
-    (input: string) => {
-      const trimmed = input.trim().toLowerCase();
-      if (!trimmed) return;
+  const GEMINI_SYSTEM =
+    "너는 문서 편집 도우미다. 사용자의 요청을 분석해서 { \"action\": \"add_text\", \"content\": \"입력할 내용\", \"type\": \"date\" } 같은 JSON 형식으로만 응답해. 다른 설명 없이 JSON 객체 하나만 출력해.";
 
+  const runAiCommandFallback = useCallback(
+    (trimmed: string) => {
       if (trimmed.includes('자동 채우기') || trimmed.includes('오늘 날짜로 채워줘') || trimmed.includes('날짜로 채워')) {
         setAiStatus('양식 분석 중...');
         setTimeout(() => {
@@ -732,6 +663,109 @@ function App() {
     [focusedId, updateStyle, addToast]
   );
 
+  const addTextObject = useCallback((text: string, x: number = 150, y: number = 150) => {
+    const container = containerRef.current;
+    const rect = container?.getBoundingClientRect();
+    const cw = rect?.width ?? 400;
+    const ch = rect?.height ?? 560;
+    const clampedX = Math.max(0, Math.min(cw - DEFAULT_WIDTH, x));
+    const clampedY = Math.max(0, Math.min(ch - DEFAULT_HEIGHT, y));
+    const newObj: TextObject = {
+      id: crypto.randomUUID(),
+      x: clampedX,
+      y: clampedY,
+      text,
+      fontSize: 16,
+      width: DEFAULT_WIDTH,
+      height: DEFAULT_HEIGHT,
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAlign: 'left',
+      color: '#000000',
+      fontFamily: 'sans-serif',
+      opacity: 0.9,
+      letterSpacing: 0,
+      lineHeight: 1.4,
+    };
+    setTextObjects((prev) => [...prev, newObj]);
+  }, []);
+
+  const callGeminiAndApply = useCallback(
+    async (userInput: string): Promise<boolean> => {
+      let apiKey: string | undefined;
+      try {
+        apiKey = import.meta.env.VITE_GEMINI_API_KEY as string | undefined;
+      } catch {
+        return false;
+      }
+      if (!apiKey?.trim()) return false;
+      try {
+        const genAI = new GoogleGenerativeAI(apiKey);
+        const model = genAI.getGenerativeModel({
+          model: 'gemini-1.5-flash',
+          systemInstruction: GEMINI_SYSTEM,
+        });
+        const result = await model.generateContent(userInput);
+        const text = result?.response?.text?.()?.trim() ?? '';
+        const jsonStr = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+        let parsed: { action?: string; content?: string; type?: string };
+        try {
+          parsed = JSON.parse(jsonStr);
+        } catch {
+          return false;
+        }
+        if (parsed?.action !== 'add_text' || !parsed?.content) return false;
+        addTextObject(String(parsed.content), 150, 150);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [addTextObject]
+  );
+
+  const runAiCommand = useCallback(
+    (input: string) => {
+      const trimmed = input.trim();
+      const trimmedLower = trimmed.toLowerCase();
+      if (!trimmed) return;
+
+      let useGemini = false;
+      try {
+        useGemini = !!(import.meta.env.VITE_GEMINI_API_KEY as string | undefined)?.trim();
+      } catch {
+        // 키 읽기 실패 시 Gemini 미사용
+      }
+      if (useGemini) {
+        setAiLoading(true);
+        setAiStatus('생각 중...');
+        addToast('info', 'AI가 문서의 맥락을 분석하고 있습니다...');
+        callGeminiAndApply(trimmed)
+          .then((applied) => {
+            if (applied) {
+              addToast('success', 'AI가 텍스트를 생성했습니다!');
+            } else {
+              setAiStatus('');
+              runAiCommandFallback(trimmedLower);
+            }
+          })
+          .catch(() => {
+            setAiStatus('');
+            addToast('error', 'AI 요청에 실패했습니다.');
+            runAiCommandFallback(trimmedLower);
+          })
+          .finally(() => {
+            setAiLoading(false);
+            setAiStatus('');
+          });
+        return;
+      }
+
+      runAiCommandFallback(trimmedLower);
+    },
+    [callGeminiAndApply, addToast, runAiCommandFallback]
+  );
+
   const handleAiKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -753,8 +787,6 @@ function App() {
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return;
-    const ok = window.confirm('이전 작업 내용을 불러오시겠습니까?');
-    if (!ok) return;
     try {
       const data: StoredData = JSON.parse(raw);
       setBackgroundImage(data.image ?? null);
@@ -774,59 +806,28 @@ function App() {
       setFocusedId(null);
       setSaveStatus('saved');
       skipNextAutoSaveRef.current = true;
+      addToast('info', '이전 작업을 복구했습니다.');
     } catch {
       // ignore corrupted data
     }
-  }, []);
+  }, [addToast]);
 
   return (
     <div className="min-h-screen bg-[#F9FAFB] flex flex-col">
       <ToastContainer toasts={toasts} remove={removeToast} />
 
-      <header className="no-print bg-white border-b border-gray-100 py-3 px-6">
-        <div className="max-w-5xl mx-auto flex items-center justify-between gap-4">
-          <button
-            type="button"
-            onClick={handleLogoClick}
-            className="text-lg font-bold text-indigo-600 tracking-tight hover:text-indigo-700 transition-colors text-left font-sans"
-          >
+      <header className="no-print bg-white border-b border-gray-100/80 py-2.5 px-4">
+        <div className="flex items-center justify-between gap-4">
+          <button type="button" onClick={handleLogoClick} className="text-base font-semibold text-gray-900 hover:text-gray-700 transition-colors font-sans">
             DocuFlow
           </button>
-          <div className="flex items-center gap-3">
-            {saveStatus === 'pending' && (
-              <span className="text-xs text-gray-500">Saving...</span>
-            )}
-            {saveStatus === 'saved' && (
-              <span className="text-xs text-green-600">All changes saved</span>
-            )}
-            <button
-              type="button"
-              onClick={handleSave}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
-              Quick Save
-            </button>
-            <button
-              type="button"
-              onClick={openLoadModal}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
-              Load
-            </button>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
-            >
-              Reset
-            </button>
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-            >
-              Export PDF
-            </button>
+          <div className="flex items-center gap-2">
+            {saveStatus === 'pending' && <span className="text-xs text-gray-400">Saving...</span>}
+            {saveStatus === 'saved' && <span className="text-xs text-emerald-600">Saved</span>}
+            <button type="button" onClick={handleSave} className="px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-100">Quick Save</button>
+            <button type="button" onClick={openLoadModal} className="px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-100">Load</button>
+            <button type="button" onClick={handleReset} className="px-2.5 py-1.5 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-100">Reset</button>
+            <button type="button" onClick={() => window.print()} className="px-3 py-1.5 rounded-md text-xs font-medium text-white bg-gray-900 hover:bg-gray-800">Export PDF</button>
           </div>
         </div>
       </header>
@@ -895,14 +896,26 @@ function App() {
               <button
                 type="button"
                 onClick={() => setShowSoftWall(false)}
-                className="flex-1 py-2 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
+                className="flex-1 min-w-0 py-2 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200"
               >
                 나중에
               </button>
               <button
                 type="button"
-                onClick={() => { setShowSoftWall(false); addToast('info', '로그인 기능은 준비 중입니다.'); }}
-                className="flex-1 py-2 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                onClick={async () => {
+                  try {
+                    await signInWithGoogle();
+                    setShowSoftWall(false);
+                    addToast('success', '로그인되었습니다.');
+                  } catch (err: unknown) {
+                    const msg = (err instanceof Error && err.message?.includes('설정되지 않았습니다'))
+                      ? 'Firebase 설정 후 이용해 주세요.'
+                      : (err instanceof Error ? err.message : '로그인에 실패했습니다.');
+                    addToast('error', msg);
+                  }
+                }}
+                className="flex-1 min-w-0 rounded-xl text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 text-center overflow-hidden box-border"
+                style={{ whiteSpace: 'normal', wordBreak: 'keep-all', padding: 12, lineHeight: 1.2 }}
               >
                 로그인하고 영구 저장하기
               </button>
@@ -911,8 +924,9 @@ function App() {
         </div>
       )}
 
-      <main className="flex-1 flex items-center justify-center p-8">
+      <main className="flex-1 flex flex-col min-h-0">
         {!backgroundImage ? (
+          <div className="flex-1 flex items-center justify-center p-8">
           <div className="w-full max-w-2xl flex flex-col items-center gap-10">
             <label className="no-print w-full min-h-[320px] flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white hover:border-indigo-400 hover:bg-indigo-50/50 transition-colors cursor-pointer">
               <input
@@ -953,38 +967,58 @@ function App() {
               </p>
             </section>
           </div>
+          </div>
         ) : (
-          <div className="w-full max-w-4xl">
-            <div className="no-print flex items-center justify-between mb-4 gap-2 flex-wrap">
-              <label className="text-sm font-medium text-gray-600 cursor-pointer px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                이미지 변경
-                <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-              </label>
-              <button
-                type="button"
-                onClick={() => setShowGrid((v) => !v)}
-                className={`text-sm font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-                  showGrid ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:bg-gray-50 text-gray-600'
-                }`}
-              >
-                {showGrid ? 'Hide Guides' : 'Guides'}
-              </button>
-              <p className="text-sm text-gray-500">빈 곳 클릭 → 텍스트 추가 · 드래그 이동 · 선택 시 툴바에서 스타일/삭제</p>
-            </div>
+          <div className="no-print flex flex-1 w-full min-h-0">
+            {/* Left: Layers */}
+            <aside className="w-52 flex-shrink-0 border-r border-gray-100 bg-white flex flex-col">
+              <div className="p-3 border-b border-gray-100">
+                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Layers</h2>
+              </div>
+              <div className="flex-1 overflow-auto p-2">
+                {textObjects.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-4 text-center">Click canvas to add text</p>
+                ) : (
+                  textObjects.map((o, i) => (
+                    <button
+                      key={o.id}
+                      type="button"
+                      onClick={() => setFocusedId(o.id)}
+                      className={`w-full text-left px-2.5 py-2 rounded-md text-xs truncate mb-0.5 transition-colors ${
+                        focusedId === o.id ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {o.text.trim() || `Layer ${i + 1}`}
+                    </button>
+                  ))
+                )}
+              </div>
+            </aside>
 
-            <div className="flex gap-4 w-full max-w-[calc(210mm+320px+2rem)]">
-              <div className="flex-1 min-w-0">
-                <div
-                  ref={containerRef}
-                  className="EditorContainer relative mx-auto bg-gray-200 bg-center bg-cover bg-no-repeat rounded-xl overflow-hidden shadow-2xl cursor-crosshair"
-                  style={{
-                    backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
-                    aspectRatio: '210 / 297',
-                    maxWidth: '210mm',
-                    minHeight: '400px',
-                  }}
-                  onClick={handleContainerClick}
-                >
+            {/* Center: Canvas */}
+            <div className="flex-1 min-w-0 flex flex-col items-center justify-center p-6 bg-[#fafafa]">
+              <div className="flex items-center gap-2 mb-3 self-center">
+                <label className="text-xs text-gray-500 hover:text-gray-700 cursor-pointer px-2 py-1 rounded hover:bg-gray-100">
+                  Change image
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
+                </label>
+                <span className="text-gray-300">·</span>
+                <button type="button" onClick={() => setShowGrid((v) => !v)} className={`text-xs px-2 py-1 rounded ${showGrid ? 'text-gray-900 bg-gray-200' : 'text-gray-500 hover:bg-gray-100'}`}>
+                  Guides
+                </button>
+              </div>
+              <div
+                ref={containerRef}
+                className="EditorContainer relative bg-white bg-center bg-cover bg-no-repeat rounded-lg overflow-hidden cursor-crosshair border border-gray-200 shadow-sm"
+                style={{
+                  backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
+                  aspectRatio: '210 / 297',
+                  width: '100%',
+                  maxWidth: 'min(calc(100vh * 0.7 * 210/297), 210mm)',
+                  minHeight: '360px',
+                }}
+                onClick={handleContainerClick}
+              >
                   {showGrid && (
                     <div
                       className="no-print absolute inset-0 pointer-events-none z-[1] opacity-[0.15]"
@@ -997,6 +1031,33 @@ function App() {
                       }}
                     />
                   )}
+                  {focusedId && (() => {
+                    const sel = textObjects.find((o) => o.id === focusedId);
+                    if (!sel) return null;
+                    return (
+                      <div
+                        className="no-print absolute z-20 flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg shadow-sm px-1.5 py-1"
+                        style={{
+                          left: sel.x + sel.width / 2,
+                          top: sel.y - 40,
+                          transform: 'translate(-50%, 0)',
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button type="button" className="p-2 rounded-md hover:bg-gray-100 text-gray-600" onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { fontSize: Math.max(MIN_FONT_SIZE, sel.fontSize - 2) }); }} title="Decrease size">A−</button>
+                        <button type="button" className="p-2 rounded-md hover:bg-gray-100 text-gray-600" onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { fontSize: Math.min(MAX_FONT_SIZE, sel.fontSize + 2) }); }} title="Increase size">A+</button>
+                        <span className="w-px h-4 bg-gray-200" />
+                        <button type="button" className={`p-2 rounded-md font-bold ${sel.fontWeight === 'bold' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`} onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { fontWeight: sel.fontWeight === 'bold' ? 'normal' : 'bold' }); }}>B</button>
+                        <button type="button" className={`p-2 rounded-md italic ${sel.fontStyle === 'italic' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`} onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { fontStyle: sel.fontStyle === 'italic' ? 'normal' : 'italic' }); }}>I</button>
+                        <span className="w-px h-4 bg-gray-200" />
+                        <button type="button" className={`p-2 rounded-md ${sel.textAlign === 'left' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`} onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { textAlign: 'left' }); }}><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm0 4h10v2H4V9zm0 4h16v2H4v-2zm0 4h10v2H4v-2z"/></svg></button>
+                        <button type="button" className={`p-2 rounded-md ${sel.textAlign === 'center' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`} onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { textAlign: 'center' }); }}><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm4 4h8v2H8V9zm-4 4h16v2H4v-2zm4 4h8v2H8v-2z"/></svg></button>
+                        <button type="button" className={`p-2 rounded-md ${sel.textAlign === 'right' ? 'bg-gray-100 text-gray-900' : 'text-gray-500 hover:bg-gray-100'}`} onClick={(e) => { e.stopPropagation(); updateStyle(focusedId, { textAlign: 'right' }); }}><svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M4 5h16v2H4V5zm6 4h10v2H10V9zm-6 4h16v2H4v-2zm6 4h10v2H10v-2z"/></svg></button>
+                        <span className="w-px h-4 bg-gray-200" />
+                        <button type="button" data-delete-btn className="p-2 rounded-md text-gray-500 hover:bg-red-50 hover:text-red-600" onClick={(e) => { e.stopPropagation(); removeText(focusedId); }}><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg></button>
+                      </div>
+                    );
+                  })()}
                   {guideLines.map((x) => (
                     <div
                       key={x}
@@ -1021,160 +1082,71 @@ function App() {
                 </div>
               </div>
 
+            {/* Right: Style + AI */}
+            <aside className="no-print w-72 flex-shrink-0 border-l border-gray-100 bg-white flex flex-col">
               {focusedId && (() => {
                 const focused = textObjects.find((o) => o.id === focusedId);
                 if (!focused) return null;
                 return (
-                  <aside className="no-print w-60 flex-shrink-0 rounded-xl border border-gray-200 bg-white shadow-sm p-4 h-fit">
-                    <h3 className="text-sm font-semibold text-gray-800 mb-3">텍스트 스타일</h3>
-                    <div className="space-y-4">
+                  <div className="p-4 border-b border-gray-100">
+                    <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Style</h3>
+                    <div className="space-y-3">
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Font</label>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Font</label>
                         <div className="flex gap-1">
-                          <button
-                            type="button"
-                            onClick={() => updateStyle(focusedId, { fontFamily: 'serif' })}
-                            className={`flex-1 py-1.5 rounded text-xs ${focused.fontFamily === 'serif' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}
-                            style={{ fontFamily: 'Georgia, serif' }}
-                          >
-                            명조체
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStyle(focusedId, { fontFamily: 'sans-serif' })}
-                            className={`flex-1 py-1.5 rounded text-xs ${focused.fontFamily === 'sans-serif' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}
-                            style={{ fontFamily: 'sans-serif' }}
-                          >
-                            고딕체
-                          </button>
+                          <button type="button" onClick={() => updateStyle(focusedId, { fontFamily: 'serif' })} className={`flex-1 py-1.5 rounded text-xs ${focused.fontFamily === 'serif' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} style={{ fontFamily: 'Georgia, serif' }}>Serif</button>
+                          <button type="button" onClick={() => updateStyle(focusedId, { fontFamily: 'sans-serif' })} className={`flex-1 py-1.5 rounded text-xs ${focused.fontFamily === 'sans-serif' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} style={{ fontFamily: 'sans-serif' }}>Sans</button>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Style</label>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Style</label>
                         <div className="flex gap-1 flex-wrap">
-                          <button
-                            type="button"
-                            onClick={() => updateStyle(focusedId, { fontWeight: focused.fontWeight === 'bold' ? 'normal' : 'bold' })}
-                            className={`px-2.5 py-1.5 rounded text-xs font-bold ${focused.fontWeight === 'bold' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}
-                          >
-                            Bold
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateStyle(focusedId, { fontStyle: focused.fontStyle === 'italic' ? 'normal' : 'italic' })}
-                            className={`px-2.5 py-1.5 rounded text-xs italic ${focused.fontStyle === 'italic' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}
-                          >
-                            Italic
-                          </button>
-                          <input
-                            type="color"
-                            value={(focused.color ?? '#000000').slice(0, 7)}
-                            onChange={(e) => updateStyle(focusedId, { color: e.target.value })}
-                            className="w-8 h-8 rounded border border-gray-200 cursor-pointer flex-shrink-0"
-                          />
+                          <button type="button" onClick={() => updateStyle(focusedId, { fontWeight: focused.fontWeight === 'bold' ? 'normal' : 'bold' })} className={`px-2 py-1 rounded text-xs font-bold ${focused.fontWeight === 'bold' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>B</button>
+                          <button type="button" onClick={() => updateStyle(focusedId, { fontStyle: focused.fontStyle === 'italic' ? 'normal' : 'italic' })} className={`px-2 py-1 rounded text-xs italic ${focused.fontStyle === 'italic' ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>I</button>
+                          <input type="color" value={(focused.color ?? '#000000').slice(0, 7)} onChange={(e) => updateStyle(focusedId, { color: e.target.value })} className="w-7 h-7 rounded border border-gray-200 cursor-pointer flex-shrink-0" />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Color</label>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[
-                            { name: '검정', value: '#000000' },
-                            { name: '빨강', value: '#dc2626' },
-                            { name: '파랑', value: '#2563eb' },
-                          ].map(({ name, value }) => (
-                            <button
-                              key={value}
-                              type="button"
-                              onClick={() => updateStyle(focusedId, { color: value })}
-                              className={`w-8 h-8 rounded border-2 transition-all ${
-                                (focused.color ?? '#000000') === value ? 'border-indigo-600 scale-110' : 'border-gray-200 hover:border-gray-300'
-                              }`}
-                              style={{ backgroundColor: value }}
-                              title={name}
-                            />
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Color</label>
+                        <div className="flex flex-wrap gap-1">
+                          {[{ value: '#000000' }, { value: '#dc2626' }, { value: '#2563eb' }].map(({ value }) => (
+                            <button key={value} type="button" onClick={() => updateStyle(focusedId, { color: value })} className={`w-6 h-6 rounded border transition-all ${(focused.color ?? '#000000') === value ? 'border-gray-900 ring-1 ring-gray-900' : 'border-gray-200 hover:border-gray-300'}`} style={{ backgroundColor: value }} />
                           ))}
-                          <input
-                            type="color"
-                            value={(focused.color ?? '#000000').slice(0, 7)}
-                            onChange={(e) => updateStyle(focusedId, { color: e.target.value })}
-                            className="w-8 h-8 rounded border border-gray-200 cursor-pointer"
-                          />
+                          <input type="color" value={(focused.color ?? '#000000').slice(0, 7)} onChange={(e) => updateStyle(focusedId, { color: e.target.value })} className="w-6 h-6 rounded border border-gray-200 cursor-pointer" />
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Spacing</label>
-                        <div className="space-y-2">
-                          <div>
-                            <p className="text-[10px] text-gray-400">자간 {(focused.letterSpacing ?? 0)}px</p>
-                            <input
-                              type="range"
-                              min={-1}
-                              max={3}
-                              step={0.5}
-                              value={focused.letterSpacing ?? 0}
-                              onChange={(e) => updateStyle(focusedId, { letterSpacing: Number(e.target.value) })}
-                              className="w-full h-1.5 rounded-lg appearance-none bg-gray-200 accent-indigo-600"
-                            />
-                          </div>
-                          <div>
-                            <p className="text-[10px] text-gray-400">행간 {(focused.lineHeight ?? 1.4).toFixed(1)}</p>
-                            <input
-                              type="range"
-                              min={1}
-                              max={2.5}
-                              step={0.1}
-                              value={focused.lineHeight ?? 1.4}
-                              onChange={(e) => updateStyle(focusedId, { lineHeight: Number(e.target.value) })}
-                              className="w-full h-1.5 rounded-lg appearance-none bg-gray-200 accent-indigo-600"
-                            />
-                          </div>
-                        </div>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Letter spacing</label>
+                        <input type="range" min={-1} max={3} step={0.5} value={focused.letterSpacing ?? 0} onChange={(e) => updateStyle(focusedId, { letterSpacing: Number(e.target.value) })} className="w-full h-1 rounded-full bg-gray-200 appearance-none accent-gray-900" />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-gray-500 mb-1.5">Blending</label>
-                        <p className="text-[10px] text-gray-400 mb-0.5">mix-blend-mode: multiply · 투명도</p>
-                        <input
-                          type="range"
-                          min={0.5}
-                          max={1}
-                          step={0.05}
-                          value={focused.opacity ?? 0.9}
-                          onChange={(e) => updateStyle(focusedId, { opacity: Number(e.target.value) })}
-                          className="w-full h-1.5 rounded-lg appearance-none bg-gray-200 accent-indigo-600"
-                        />
-                        <p className="text-[10px] text-gray-400 mt-0.5">{(focused.opacity ?? 0.9).toFixed(2)}</p>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Line height</label>
+                        <input type="range" min={1} max={2.5} step={0.1} value={focused.lineHeight ?? 1.4} onChange={(e) => updateStyle(focusedId, { lineHeight: Number(e.target.value) })} className="w-full h-1 rounded-full bg-gray-200 appearance-none accent-gray-900" />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-gray-400 mb-1">Opacity</label>
+                        <input type="range" min={0.5} max={1} step={0.05} value={focused.opacity ?? 0.9} onChange={(e) => updateStyle(focusedId, { opacity: Number(e.target.value) })} className="w-full h-1 rounded-full bg-gray-200 appearance-none accent-gray-900" />
                       </div>
                     </div>
-                  </aside>
+                  </div>
                 );
               })()}
-
-              <aside className="no-print w-[320px] flex-shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                <div className="p-4 border-b border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800">AI 커맨드</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">명령 입력 후 Enter로 실행</p>
-                </div>
-                <div className="p-4 flex-1 flex flex-col gap-2">
-                  <textarea
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    onKeyDown={handleAiKeyDown}
-                    placeholder="무엇을 도와드릴까요?"
-                    className="w-full min-h-[100px] px-3 py-2.5 rounded-lg border border-gray-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-sm resize-none"
-                    rows={4}
-                  />
-                  {aiStatus && (
-                    <div className="flex items-center gap-2 text-sm text-indigo-600">
-                      <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-                      {aiStatus}
+              <div className="p-4 flex-1 flex flex-col gap-2 border-t border-gray-100">
+                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">AI</h3>
+                <div className="flex gap-2 items-start">
+                  <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} onKeyDown={handleAiKeyDown} placeholder="예: 날짜 써줘, 이름 넣어줘" className="flex-1 min-w-0 min-h-[88px] px-3 py-2 rounded-lg border border-gray-200 focus:border-gray-400 focus:ring-1 focus:ring-gray-400 outline-none text-sm resize-none bg-gray-50/50 disabled:opacity-70" rows={3} disabled={aiLoading} />
+                  {aiLoading && (
+                    <div className="flex-shrink-0 pt-2 flex items-center gap-1" aria-hidden>
+                      <span className="ai-thinking-dot w-1.5 h-1.5 rounded-full bg-gray-400" />
+                      <span className="ai-thinking-dot w-1.5 h-1.5 rounded-full bg-gray-400 animation-delay-150" />
+                      <span className="ai-thinking-dot w-1.5 h-1.5 rounded-full bg-gray-400 animation-delay-300" />
                     </div>
                   )}
-                  <p className="text-[10px] text-gray-400 min-h-[14px] transition-opacity duration-300" key={aiExampleIndex}>
-                    {AI_EXAMPLES[aiExampleIndex]}
-                  </p>
                 </div>
-              </aside>
-            </div>
+                {aiStatus && !aiLoading && <div className="flex items-center gap-2 text-xs text-gray-600"><span className="w-1.5 h-1.5 rounded-full bg-gray-500 animate-pulse" />{aiStatus}</div>}
+                <p className="text-[10px] text-gray-400 min-h-[12px]" key={aiExampleIndex}>{AI_EXAMPLES[aiExampleIndex]}</p>
+              </div>
+            </aside>
           </div>
         )}
       </main>
