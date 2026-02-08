@@ -788,44 +788,44 @@ function App() {
           <button
             type="button"
             onClick={handleLogoClick}
-            className="text-lg font-bold text-indigo-600 tracking-tight hover:text-indigo-700 transition-colors text-left"
+            className="text-lg font-bold text-indigo-600 tracking-tight hover:text-indigo-700 transition-colors text-left font-sans"
           >
-            도큐플로우
+            DocuFlow
           </button>
           <div className="flex items-center gap-3">
             {saveStatus === 'pending' && (
-              <span className="text-xs text-gray-500">저장 중...</span>
+              <span className="text-xs text-gray-500">Saving...</span>
             )}
             {saveStatus === 'saved' && (
-              <span className="text-xs text-green-600">모든 변경사항 저장됨</span>
+              <span className="text-xs text-green-600">All changes saved</span>
             )}
             <button
               type="button"
               onClick={handleSave}
               className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
             >
-              즉시 저장
+              Quick Save
             </button>
             <button
               type="button"
               onClick={openLoadModal}
               className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
             >
-              불러오기
+              Load
             </button>
             <button
               type="button"
               onClick={handleReset}
               className="px-3 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
             >
-              초기화
+              Reset
             </button>
             <button
               type="button"
               onClick={() => window.print()}
               className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
             >
-              PDF로 저장
+              Export PDF
             </button>
           </div>
         </div>
@@ -840,8 +840,8 @@ function App() {
           />
           <div className="relative bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
             <div className="px-6 pt-6 pb-2">
-              <h2 className="text-xl font-semibold text-gray-900">저장된 작업 불러오기</h2>
-              <p className="text-sm text-gray-500 mt-1">클릭 시 해당 버전으로 즉시 복구됩니다.</p>
+              <h2 className="text-xl font-semibold text-gray-900">Load Saved Work</h2>
+              <p className="text-sm text-gray-500 mt-1">Click to restore this version.</p>
             </div>
             <ul className="px-4 pb-4 space-y-2">
               <li>
@@ -853,14 +853,14 @@ function App() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="font-medium text-gray-900 group-hover:text-violet-800">
-                        📅 {loadPreviewData.savedAt ?? '날짜 없음'}
+                        📅 {loadPreviewData.savedAt ?? 'No date'}
                       </p>
                       <p className="text-sm text-gray-500 mt-0.5">
-                        텍스트 {loadPreviewData.fieldCount ?? loadPreviewData.texts?.length ?? 0}개
+                        {loadPreviewData.fieldCount ?? loadPreviewData.texts?.length ?? 0} text box(es)
                       </p>
                     </div>
                     <span className="text-violet-600 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-                      복구 →
+                      Restore →
                     </span>
                   </div>
                   {(loadPreviewData.image ?? loadPreviewData.thumbnail) && (
@@ -878,7 +878,7 @@ function App() {
                 onClick={closeLoadModal}
                 className="w-full py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
               >
-                닫기
+                Close
               </button>
             </div>
           </div>
@@ -924,32 +924,32 @@ function App() {
               <svg className="w-14 h-14 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
-              <span className="text-gray-600 font-medium">이미지를 업로드하세요</span>
+              <span className="text-gray-600 font-medium">Upload Document Image</span>
               <span className="text-sm text-gray-400 mt-1">JPG, PNG, WEBP</span>
             </label>
 
             <section className="w-full text-center no-print">
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                프린터 없이 서류를 작성하는 가장 빠른 방법
+              <h2 className="text-2xl font-bold text-gray-900 mb-2 font-sans">
+                The Fastest Way to Fill Out Paperwork
               </h2>
               <div className="flex flex-wrap items-center justify-center gap-4 mt-6 text-sm text-gray-600">
                 <span className="flex items-center gap-2">
                   <span className="flex w-9 h-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">1</span>
-                  업로드
+                  Upload
                 </span>
                 <span className="text-gray-300">→</span>
                 <span className="flex items-center gap-2">
                   <span className="flex w-9 h-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">2</span>
-                  AI 스타일링
+                  AI Styling
                 </span>
                 <span className="text-gray-300">→</span>
                 <span className="flex items-center gap-2">
                   <span className="flex w-9 h-9 items-center justify-center rounded-full bg-indigo-100 text-indigo-700 font-bold">3</span>
-                  PDF 저장
+                  Save PDF
                 </span>
               </div>
               <p className="mt-6 text-gray-500 text-sm">
-                이미 1,000명 이상의 사용자가 서류 작성 시간을 90% 단축했습니다.
+                Over 1,000 users have cut document time by 90%.
               </p>
             </section>
           </div>
@@ -967,7 +967,7 @@ function App() {
                   showGrid ? 'border-indigo-300 bg-indigo-50 text-indigo-700' : 'border-gray-200 hover:bg-gray-50 text-gray-600'
                 }`}
               >
-                {showGrid ? '눈금 끄기' : '눈금 켜기'}
+                {showGrid ? 'Hide Guides' : 'Guides'}
               </button>
               <p className="text-sm text-gray-500">빈 곳 클릭 → 텍스트 추가 · 드래그 이동 · 선택 시 툴바에서 스타일/삭제</p>
             </div>
